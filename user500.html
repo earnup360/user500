@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Task Networks - User Panel</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Telegram Web App SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
+    <!-- Firebase SDK (Compat version for simple HTML integration) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+
+    <style>
+        body {
+            background-color: #f4f9f7;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            padding-bottom: 80px;
+        }
+        .bg-dark-green { background: linear-gradient(135deg, #033f2b, #067853); }
+        .text-dark-green { color: #067853; }
+        .nav-item.active { color: #067853; }
+        .nav-item.active .indicator { display: block; }
+        .page-section { display: none; animation: fadeIn 0.3s ease-in-out; }
+        .page-section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Toast Notification */
+        .toast {
+            position: fixed; bottom: -60px; left: 50%; transform: translateX(-50%);
+            background: #333; color: white; padding: 10px 20px; border-radius: 30px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000;
+            transition: bottom 0.3s ease; font-size: 0.85rem; font-weight: bold;
+        }
+        .toast.show { bottom: 90px; }
+
+        /* Ad Overlay */
+        #ad-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.95); z-index: 9999;
+            flex-direction: column; justify-content: center; align-items: center; color: white; text-align: center;
+        }
+    </style>
+</head>
+<body class="text-gray-800 relative min-h-screen">
+
+    <!-- TOAST NOTIFICATION -->
+    <div id="toast" class="toast">Message</div>
+
+    <!-- AD WATCH TIMER OVERLAY -->
+    <div id="ad-overlay" class="flex">
+        <i class="fa-solid fa-spinner fa-spin text-5xl text-green-500 mb-4"></i>
+        <h2 class="text-2xl font-bold mb-2">Watching Ad...</h2>
+        <p class="text-gray-300 text-sm mb-6">Please wait, do not close the app.</p>
+        <div class="w-24 h-24 rounded-full border-4 border-green-500 flex items-center justify-center text-4xl font-bold text-yellow-400" id="timer-text">
+            15
+        </div>
+        <button id="ad-close-btn" class="mt-8 bg-green-600 px-6 py-2 rounded-full font-bold hidden" onclick="closeAdModalAndReward()">Claim Reward</button>
+    </div>
+
+    <!-- BLOCKED SCREEN -->
+    <div id="blocked-screen" style="display: none;" class="h-screen flex-col items-center justify-center text-center p-6 bg-white z-[10000] fixed w-full top-0">
+        <i class="fas fa-user-slash text-6xl text-red-500 mb-4"></i>
+        <h1 class="text-2xl font-bold text-gray-800">Account Blocked!</h1>
+        <p class="text-gray-500 mt-2 text-sm leading-relaxed mb-6">আপনার অ্যাকাউন্টটি সাময়িকভাবে বন্ধ করা হয়েছে। বিস্তারিত জানতে আমাদের সাপোর্ট গ্রুপে যোগাযোগ করুন।</p>
+        <a id="support-link" href="#" target="_blank" class="bg-dark-green text-white px-8 py-3 rounded-full font-bold shadow-md">Contact Support</a>
+    </div>
+
+    <!-- ================= TOP HEADER ================= -->
+    <header class="flex justify-between items-center bg-white p-4 mx-4 mt-4 rounded-full shadow-sm">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-gray-200 rounded-full overflow-hidden border-2 border-green-500 relative">
+                <img id="header-avatar" src="https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png" class="w-full h-full object-cover">
+            </div>
+            <div>
+                <h2 id="header-name" class="font-bold text-sm text-gray-800 flex items-center gap-1">Loading... <i class="fas fa-check-circle text-blue-500 text-[10px]"></i></h2>
+                <p class="text-xs text-green-600 font-bold"><span id="header-balance">0</span> Points</p>
+            </div>
+        </div>
+        <div class="bg-green-50 text-green-600 text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 border border-green-200">
+            <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> ACTIVE
+        </div>
+    </header>
+
+    <!-- ================= PAGES CONTAINER ================= -->
+    <main class="p-4">
+
+        <!-- 1. HOME PAGE -->
+        <section id="page-home" class="page-section active">
+            <div class="bg-dark-green text-white rounded-3xl p-6 shadow-lg mb-6 relative overflow-hidden">
+                <p class="text-[10px] tracking-wider text-gray-300 mb-1" id="app-title-display">CURRENT PROFIT WALLET</p>
+                <h1 class="text-4xl font-extrabold text-yellow-400 mb-6"><span id="home-balance">0</span> <span class="text-xl">Pts</span></h1>
+                
+                <div class="flex bg-white/10 rounded-xl p-3 backdrop-blur-sm border border-white/10">
+                    <div class="flex-1 border-r border-white/20 text-center">
+                        <p class="text-[10px] text-gray-300">ADS VIEWED</p>
+                        <p class="font-bold text-sm" id="home-total-ads">0</p>
+                    </div>
+                    <div class="flex-1 text-center">
+                        <p class="text-[10px] text-gray-300">MY NETWORK</p>
+                        <p class="font-bold text-sm" id="home-network">0</p>
+                    </div>
+                </div>
+                <div class="absolute -top-12 -right-12 w-40 h-40 bg-white/5 rounded-full blur-2xl"></div>
+            </div>
+
+            <!-- Grid Menu -->
+            <div class="grid grid-cols-3 gap-4 mb-6">
+                <div onclick="switchTab('earn')" class="bg-white p-4 rounded-2xl shadow-sm text-center flex flex-col items-center gap-2 cursor-pointer active:scale-95 transition">
+                    <div class="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center text-green-600 text-xl"><i class="fa-solid fa-circle-play"></i></div>
+                    <span class="text-[11px] font-bold text-gray-700">EARN AD</span>
+                </div>
+                <div onclick="switchTab('tasks')" class="bg-white p-4 rounded-2xl shadow-sm text-center flex flex-col items-center gap-2 cursor-pointer active:scale-95 transition">
+                    <div class="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-500 text-xl"><i class="fa-brands fa-telegram"></i></div>
+                    <span class="text-[11px] font-bold text-gray-700">BONUS</span>
+                </div>
+                <div onclick="switchTab('deposit')" class="bg-white p-4 rounded-2xl shadow-sm text-center flex flex-col items-center gap-2 cursor-pointer active:scale-95 transition">
+                    <div class="w-12 h-12 rounded-full bg-purple-50 flex items-center justify-center text-purple-500 text-xl"><i class="fa-solid fa-building-columns"></i></div>
+                    <span class="text-[11px] font-bold text-gray-700">DEPOSIT</span>
+                </div>
+                <div onclick="switchTab('wallet')" class="bg-white p-4 rounded-2xl shadow-sm text-center flex flex-col items-center gap-2 cursor-pointer active:scale-95 transition">
+                    <div class="w-12 h-12 rounded-full bg-yellow-50 flex items-center justify-center text-yellow-500 text-xl"><i class="fa-solid fa-wallet"></i></div>
+                    <span class="text-[11px] font-bold text-gray-700">WITHDRAW</span>
+                </div>
+                <div onclick="switchTab('refer')" class="bg-white p-4 rounded-2xl shadow-sm text-center flex flex-col items-center gap-2 cursor-pointer active:scale-95 transition">
+                    <div class="w-12 h-12 rounded-full bg-pink-50 flex items-center justify-center text-pink-500 text-xl"><i class="fa-solid fa-gift"></i></div>
+                    <span class="text-[11px] font-bold text-gray-700">REFERRAL</span>
+                </div>
+                <div onclick="openOfficialChannel()" class="bg-white p-4 rounded-2xl shadow-sm text-center flex flex-col items-center gap-2 cursor-pointer active:scale-95 transition">
+                    <div class="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center text-red-500 text-xl"><i class="fa-solid fa-headset"></i></div>
+                    <span class="text-[11px] font-bold text-gray-700">SUPPORT</span>
+                </div>
+            </div>
+            
+            <!-- Daily Mission -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-bold text-gray-800">Daily Mission</h3>
+                    <span class="text-[10px] bg-dark-green text-white px-3 py-1 rounded-full font-bold">Limit: <span id="mission-target">--</span></span>
+                </div>
+                <div class="w-full bg-gray-100 rounded-full h-2.5 mb-3">
+                    <div class="bg-green-500 h-2.5 rounded-full" id="mission-bar" style="width: 0%"></div>
+                </div>
+                <div class="flex justify-between text-xs font-bold">
+                    <span class="text-gray-500">Viewed Today: <span id="mission-completed">0</span></span>
+                    <span class="text-yellow-500"><i class="fa-solid fa-star"></i> High Reward</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. EARN (ADS) PAGE -->
+        <section id="page-earn" class="page-section">
+            <div class="bg-dark-green text-white rounded-3xl p-6 shadow-lg mb-4 text-center">
+                <h2 class="text-xl font-bold text-yellow-400 mb-1">ADS REWARD CENTER</h2>
+                <p class="text-xs text-gray-200">Watch short video ads to earn points</p>
+            </div>
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div class="bg-white p-5 rounded-2xl shadow-sm text-center border-b-4 border-green-500">
+                    <i class="fa-solid fa-bolt text-green-500 text-2xl mb-2"></i>
+                    <p class="text-[10px] text-gray-400 font-bold mb-1">POINTS/AD</p>
+                    <p class="text-xl font-bold text-gray-800"><span id="earn-reward-amt">--</span> Pts</p>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-sm text-center border-b-4 border-yellow-400">
+                    <i class="fa-solid fa-clock-rotate-left text-yellow-500 text-2xl mb-2"></i>
+                    <p class="text-[10px] text-gray-400 font-bold mb-1">ADS LEFT</p>
+                    <p class="text-xl font-bold text-gray-800" id="earn-ads-left">--</p>
+                </div>
+            </div>
+            <button id="watch-ad-btn" onclick="handleWatchDailyAd()" class="w-full bg-dark-green text-white font-bold py-4 rounded-xl shadow-md flex justify-center items-center gap-2 active:scale-95 transition">
+                WATCH AD & EARN <i class="fa-solid fa-circle-play"></i>
+            </button>
+            <p class="text-center text-xs font-bold text-gray-400 mt-3">Watched: <span id="earn-viewed-today">0</span> / <span id="earn-limit-today">--</span></p>
+        </section>
+
+        <!-- 3. TASKS/BONUS PAGE -->
+        <section id="page-tasks" class="page-section">
+            <div class="bg-dark-green text-white rounded-3xl p-6 shadow-lg mb-4 text-center">
+                <div class="w-14 h-14 bg-yellow-400 rounded-full flex items-center justify-center mx-auto mb-3 text-dark-green text-3xl shadow-inner">
+                    <i class="fa-brands fa-telegram"></i>
+                </div>
+                <h2 class="text-xl font-bold text-yellow-400 mb-1">Bonus Rewards</h2>
+                <p class="text-xs text-gray-200">Join our community channels to earn bonus points.</p>
+            </div>
+            
+            <div id="bonus-list-container" class="flex flex-col gap-3">
+                <div class="text-center py-5 text-gray-400 text-sm font-bold">
+                    <i class="fa-solid fa-spinner fa-spin text-xl mb-2"></i><br>Loading...
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. DEPOSIT PAGE -->
+        <section id="page-deposit" class="page-section">
+            <div class="bg-dark-green text-white rounded-3xl p-6 shadow-lg mb-4 text-center relative">
+                <i class="fa-solid fa-building-columns text-4xl text-yellow-400 mb-2"></i>
+                <h2 class="text-xl font-bold text-yellow-400">Account Activation</h2>
+                <p class="text-[10px] text-gray-200 mt-1">Activate account or buy points</p>
+            </div>
+
+            <div class="bg-white p-5 rounded-2xl shadow-sm mb-4">
+                <label class="text-[10px] font-bold text-gray-500 mb-2 block tracking-wide">1. SELECT PAYMENT METHOD</label>
+                <select id="depositMethodSelect" class="w-full bg-gray-50 rounded-xl p-3.5 border border-gray-100 mb-4 text-sm font-bold text-gray-700 outline-none focus:border-green-500" onchange="updateDepositDetailsUI()">
+                    <option value="">Choose Gateway...</option>
+                </select>
+
+                <div id="deposit-number-box" style="display: none;" class="bg-[#f0fdf4] border border-green-200 p-4 rounded-xl mb-4">
+                    <label class="text-[10px] font-bold text-green-700 mb-1 block" id="deposit-method-label">Our Number:</label>
+                    <div class="flex items-center gap-2">
+                        <input type="text" id="targetDepositNumber" class="bg-white border border-green-300 rounded text-sm font-bold p-2 flex-1 outline-none" readonly>
+                        <button onclick="copyElementText('targetDepositNumber')" class="bg-dark-green text-white px-3 py-2 rounded text-xs font-bold"><i class="fas fa-copy"></i></button>
+                    </div>
+                    <p id="deposit-method-hint" class="text-[10px] text-gray-500 mt-1"></p>
+                </div>
+
+                <label class="text-[10px] font-bold text-gray-500 mb-2 block tracking-wide">2. AMOUNT SENT (TK)</label>
+                <input type="number" id="depositAmountInput" class="w-full bg-gray-50 rounded-xl p-3.5 border border-gray-100 mb-4 text-sm font-bold outline-none focus:border-green-500" placeholder="e.g. 100">
+
+                <label class="text-[10px] font-bold text-gray-500 mb-2 block tracking-wide">3. SENDER NUMBER</label>
+                <input type="text" id="depositSenderInput" class="w-full bg-gray-50 rounded-xl p-3.5 border border-gray-100 mb-4 text-sm font-bold outline-none focus:border-green-500" placeholder="01XXXXXXXXX">
+
+                <label class="text-[10px] font-bold text-gray-500 mb-2 block tracking-wide">4. TRANSACTION ID</label>
+                <input type="text" id="depositTrxInput" class="w-full bg-gray-50 rounded-xl p-3.5 border border-gray-100 mb-5 text-sm font-bold outline-none focus:border-green-500" placeholder="TrxID">
+
+                <button onclick="submitDepositRequest()" class="w-full bg-dark-green text-white font-bold py-3.5 rounded-xl shadow-md active:scale-95 transition text-sm">
+                    SUBMIT DEPOSIT
+                </button>
+            </div>
+        </section>
+
+        <!-- 5. REFER PAGE -->
+        <section id="page-refer" class="page-section">
+            <div class="bg-dark-green text-white rounded-3xl p-6 shadow-lg mb-4 text-center">
+                <i class="fa-solid fa-gift text-5xl text-yellow-400 mb-3 drop-shadow-md"></i>
+                <h2 class="text-2xl font-bold text-yellow-400 mb-1">Refer & Earn</h2>
+                <p class="text-xs text-gray-200">Earn <span id="refer-bonus-amt" class="font-bold text-yellow-400">0</span> Pts for each friend!</p>
+            </div>
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div class="bg-white py-5 px-2 rounded-2xl shadow-sm text-center border-b-4 border-green-500">
+                    <p class="text-2xl font-bold text-gray-800" id="refer-total">0</p>
+                    <p class="text-[10px] text-gray-500 font-bold mt-1">TOTAL NETWORK</p>
+                </div>
+                <div class="bg-white py-5 px-2 rounded-2xl shadow-sm text-center border-b-4 border-yellow-400">
+                    <p class="text-2xl font-bold text-gray-800" id="refer-earned-total">0</p>
+                    <p class="text-[10px] text-gray-500 font-bold mt-1">TOTAL EARNED</p>
+                </div>
+            </div>
+            <div class="bg-white p-5 rounded-2xl shadow-sm mb-4">
+                <p class="text-xs font-bold text-gray-500 mb-3 flex items-center gap-1"><i class="fa-solid fa-link text-green-500"></i> YOUR REFERRAL LINK</p>
+                <div class="flex items-center bg-gray-50 rounded-xl p-1.5 border border-gray-200">
+                    <input type="text" id="referral-link" readonly value="Loading..." class="bg-transparent flex-1 outline-none text-[10px] px-2 text-gray-600 font-medium">
+                    <button onclick="copyElementText('referral-link')" class="bg-dark-green text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm active:scale-95 transition">COPY</button>
+                </div>
+                <button onclick="shareReferralLink()" class="w-full mt-4 bg-[#0088cc] text-white font-bold py-3.5 rounded-xl shadow-md flex justify-center items-center gap-2 active:scale-95 transition">
+                    <i class="fa-brands fa-telegram text-xl"></i> Share on Telegram
+                </button>
+            </div>
+        </section>
+
+        <!-- 6. WALLET (WITHDRAW) PAGE -->
+        <section id="page-wallet" class="page-section">
+            
+            <!-- Blocked/Inactive Notice -->
+            <div id="withdraw-lock-screen" class="bg-white p-8 rounded-3xl shadow-sm text-center mb-4 border border-red-100" style="display: none;">
+                <div class="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center text-3xl mx-auto mb-4"><i class="fas fa-lock"></i></div>
+                <h2 class="text-xl font-bold text-gray-800 mb-2">Withdrawal Locked</h2>
+                <p class="text-xs text-gray-500 mb-6">উইথড্র করার জন্য আপনাকে অবশ্যই অ্যাকাউন্টটি অ্যাক্টিভেট করতে হবে।</p>
+                <button onclick="switchTab('deposit')" class="bg-dark-green text-white px-6 py-2.5 rounded-full font-bold shadow-md">Activate Now</button>
+            </div>
+
+            <div id="withdraw-active-screen">
+                <div class="bg-dark-green text-white rounded-3xl p-6 shadow-lg mb-4 text-center relative">
+                    <p class="text-[10px] tracking-wider text-gray-300 mb-2">WITHDRAWABLE BALANCE</p>
+                    <h1 class="text-4xl font-extrabold text-yellow-400 mb-2"><span id="wallet-balance-big">0</span> Pts</h1>
+                </div>
+                
+                <div class="bg-[#fff9e6] border border-[#fde68a] p-4 rounded-2xl mb-5 flex gap-3 text-yellow-700 text-xs font-medium leading-relaxed shadow-sm">
+                    <i class="fa-solid fa-circle-info mt-0.5 text-yellow-500 text-sm"></i>
+                    <p id="withdraw-notice">Minimum withdrawal is <span id="withdraw-min-pts">0</span> Points.</p>
+                </div>
+
+                <div class="bg-white p-5 rounded-2xl shadow-sm mb-4">
+                    <label class="text-[10px] font-bold text-gray-500 mb-2 block tracking-wide">WITHDRAW POINTS</label>
+                    <div class="flex items-center bg-gray-50 rounded-xl p-3.5 border border-gray-100 mb-4 focus-within:border-green-500 transition">
+                        <i class="fa-solid fa-coins text-yellow-500 mr-3"></i>
+                        <input type="number" id="withdrawAmountInput" placeholder="Enter points" class="bg-transparent flex-1 outline-none font-bold text-gray-800 text-sm">
+                    </div>
+
+                    <label class="text-[10px] font-bold text-gray-500 mb-2 block tracking-wide">PAYMENT METHOD</label>
+                    <select id="withdrawMethodSelect" class="w-full bg-gray-50 rounded-xl p-3.5 border border-gray-100 mb-4 text-sm font-bold text-gray-700 outline-none focus:border-green-500">
+                        <!-- Options loaded by JS -->
+                    </select>
+
+                    <label class="text-[10px] font-bold text-gray-500 mb-2 block tracking-wide">ACCOUNT NUMBER</label>
+                    <div class="flex items-center bg-gray-50 rounded-xl p-3.5 border border-gray-100 mb-5 focus-within:border-green-500 transition">
+                        <i class="fa-solid fa-location-dot text-green-500 mr-3"></i>
+                        <input type="text" id="withdrawAccountInput" placeholder="01XXXXXXXXX" class="bg-transparent flex-1 outline-none text-sm font-bold text-gray-800">
+                    </div>
+                    
+                    <button onclick="handleSubmitWithdrawal()" class="w-full bg-dark-green text-white font-bold py-3.5 rounded-xl shadow-md active:scale-95 transition text-sm">
+                        REQUEST WITHDRAW
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 7. PROFILE PAGE -->
+        <section id="page-profile" class="page-section">
+            <div class="bg-dark-green text-white rounded-3xl p-6 shadow-lg mb-5 flex flex-col items-center text-center relative overflow-hidden">
+                <div class="w-24 h-24 bg-white rounded-full p-1 mb-3 relative z-10 shadow-md">
+                    <img id="profile-avatar" src="https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png" class="w-full h-full rounded-full object-cover">
+                    <div class="absolute bottom-0 right-1 bg-green-500 text-white w-6 h-6 rounded-full flex items-center justify-center border-2 border-white text-[10px]">
+                        <i class="fa-solid fa-check"></i>
+                    </div>
+                </div>
+                <h2 class="text-2xl font-bold text-yellow-400 relative z-10 mb-0.5" id="profile-name-big">Loading...</h2>
+                <div class="flex items-center justify-center gap-2 mt-2 z-10">
+                    <button onclick="promptForNewName()" class="bg-white/20 px-3 py-1 rounded text-xs font-bold hover:bg-white/30 transition"><i class="fas fa-pencil"></i> Edit Name</button>
+                </div>
+                <div class="absolute -top-10 -left-10 w-40 h-40 bg-white/5 rounded-full blur-2xl"></div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 mb-5">
+                <div class="bg-white py-4 px-3 rounded-2xl shadow-sm border-b-4 border-green-500 flex flex-col gap-1">
+                    <p class="text-[10px] text-gray-400 font-bold">CURRENT BALANCE</p>
+                    <p class="text-lg font-bold text-green-600"><span id="profile-main-bal">0</span> Pts</p>
+                </div>
+                <div class="bg-white py-4 px-3 rounded-2xl shadow-sm border-b-4 border-gray-800 flex flex-col gap-1">
+                    <p class="text-[10px] text-gray-400 font-bold">TOTAL ADS WATCHED</p>
+                    <p class="text-lg font-bold text-gray-800" id="profile-life-ads">0</p>
+                </div>
+                <div class="bg-white py-4 px-3 rounded-2xl shadow-sm border-b-4 border-yellow-400 flex flex-col gap-1">
+                    <p class="text-[10px] text-gray-400 font-bold">TODAY'S ADS</p>
+                    <p class="text-lg font-bold text-gray-800" id="profile-today-ads">0</p>
+                </div>
+                <div class="bg-white py-4 px-3 rounded-2xl shadow-sm border-b-4 border-blue-500 flex flex-col gap-1">
+                    <p class="text-[10px] text-gray-400 font-bold">NETWORK</p>
+                    <p class="text-lg font-bold text-gray-800" id="profile-ref-count">0 Ref</p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ================= BOTTOM NAVIGATION ================= -->
+    <nav class="fixed bottom-0 left-0 w-full bg-white shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.05)] rounded-t-3xl flex justify-around py-2 px-1 z-50 border-t border-gray-100">
+        <div onclick="switchTab('home')" class="nav-item active flex flex-col items-center gap-1 cursor-pointer text-gray-400 w-14" data-tab="home">
+            <i class="fa-solid fa-house text-xl mt-1"></i><span class="text-[9px] font-bold">HOME</span>
+            <div class="indicator hidden w-1 h-1 bg-green-500 rounded-full mt-0.5"></div>
+        </div>
+        <div onclick="switchTab('earn')" class="nav-item flex flex-col items-center gap-1 cursor-pointer text-gray-400 w-14" data-tab="earn">
+            <i class="fa-brands fa-youtube text-xl mt-1"></i><span class="text-[9px] font-bold">EARN</span>
+            <div class="indicator hidden w-1 h-1 bg-green-500 rounded-full mt-0.5"></div>
+        </div>
+        <div onclick="switchTab('tasks')" class="nav-item flex flex-col items-center gap-1 cursor-pointer text-gray-400 w-14" data-tab="tasks">
+            <i class="fa-solid fa-gift text-xl mt-1"></i><span class="text-[9px] font-bold">BONUS</span>
+            <div class="indicator hidden w-1 h-1 bg-green-500 rounded-full mt-0.5"></div>
+        </div>
+        <div onclick="switchTab('refer')" class="nav-item flex flex-col items-center gap-1 cursor-pointer text-gray-400 w-14" data-tab="refer">
+            <i class="fa-solid fa-users text-xl mt-1"></i><span class="text-[9px] font-bold">REFER</span>
+            <div class="indicator hidden w-1 h-1 bg-green-500 rounded-full mt-0.5"></div>
+        </div>
+        <div onclick="switchTab('wallet')" class="nav-item flex flex-col items-center gap-1 cursor-pointer text-gray-400 w-14" data-tab="wallet">
+            <i class="fa-solid fa-wallet text-xl mt-1"></i><span class="text-[9px] font-bold">WALLET</span>
+            <div class="indicator hidden w-1 h-1 bg-green-500 rounded-full mt-0.5"></div>
+        </div>
+        <div onclick="switchTab('profile')" class="nav-item flex flex-col items-center gap-1 cursor-pointer text-gray-400 w-14" data-tab="profile">
+            <i class="fa-solid fa-user text-xl mt-1"></i><span class="text-[9px] font-bold">PROFILE</span>
+            <div class="indicator hidden w-1 h-1 bg-green-500 rounded-full mt-0.5"></div>
+        </div>
+    </nav>
+
+    <!-- ================= JAVASCRIPT & FIREBASE LOGIC ================= -->
+    <script>
+        // 1. Firebase Configuration (NEW CONFIG)
+        const firebaseConfig = {
+            apiKey: "AIzaSyDdPpcvw6CGyNyA95jmZGlBE0UsOWaTqQc",
+            authDomain: "monetagbot-a89ee.firebaseapp.com",
+            databaseURL: "https://monetagbot-a89ee-default-rtdb.firebaseio.com",
+            projectId: "monetagbot-a89ee",
+            storageBucket: "monetagbot-a89ee.firebasestorage.app",
+            messagingSenderId: "1039215285316",
+            appId: "1:1039215285316:web:84f28d9702540c201c1811"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // Global Variables
+        let settings = {
+            appName: "Task Networks",
+            adsPerDayLimit: 1000,
+            pointsPerAd: 100,
+            minWithdrawPoints: 1000,
+            minReferralsRequired: 5,
+            refBonusReferrer: 300,
+            refBonusReferee: 100,
+            officialChannel: "https://t.me/+blEJMKPpQ2phN2M1",
+            supportGroup: "https://t.me/earning36p",
+            monetagId: "", 
+            referralBotLink: "https://t.me/Task_Network_bot"
+        };
+        
+        let currentUser = null;
+        let userId = null;
+
+        // Toast Helper
+        function showToast(message, duration = 3000) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => { toast.classList.remove('show'); }, duration);
+        }
+
+        // Initialize App
+        document.addEventListener('DOMContentLoaded', () => {
+            const tg = window.Telegram.WebApp;
+            tg.expand();
+            
+            userId = tg.initDataUnsafe.user ? tg.initDataUnsafe.user.id : (localStorage.getItem('deviceId') || generateId());
+            localStorage.setItem('deviceId', userId);
+
+            fetchSettings();
+            loadUserState();
+        });
+
+        function generateId() { return 'user_' + Math.random().toString(36).substr(2, 9); }
+
+        // ================= FETCH SETTINGS FROM DATABASE =================
+        function fetchSettings() {
+            database.ref('settings').on('value', (snap) => {
+                if (snap.exists()) {
+                    settings = { ...settings, ...snap.val() };
+                    
+                    document.getElementById('app-title-display').textContent = (settings.appName || "APP").toUpperCase();
+                    
+                    // Withdraw Methods Dropdown
+                    const wMethods = settings.paymentMethods || ["Bkash", "Nagad"];
+                    const wSelect = document.getElementById('withdrawMethodSelect');
+                    wSelect.innerHTML = '<option value="">Select Method</option>';
+                    wMethods.forEach(m => wSelect.innerHTML += `<option value="${m}">${m}</option>`);
+
+                    // Deposit Methods Dropdown
+                    const dMethods = settings.depositMethodList || [];
+                    const dSelect = document.getElementById('depositMethodSelect');
+                    dSelect.innerHTML = '<option value="">Choose Gateway...</option>';
+                    dMethods.forEach((m, idx) => dSelect.innerHTML += `<option value="${idx}">${m.name}</option>`);
+
+                    // Monetag SDK Load
+                    if (!window.adScriptLoaded && settings.monetagId) {
+                        var s = document.createElement('script');
+                        s.src = 'https://libtl.com/sdk.js';
+                        s.async = true;
+                        s.setAttribute('data-zone', settings.monetagId);
+                        s.setAttribute('data-sdk', 'show_' + settings.monetagId);
+                        document.head.appendChild(s);
+                        window.adScriptLoaded = true;
+                    }
+
+                    renderBonusList();
+                    updateUI();
+                }
+            });
+        }
+
+        // ================= LOAD USER =================
+        function loadUserState() {
+            database.ref('users/' + userId).on('value', (snap) => {
+                if (snap.exists()) {
+                    currentUser = snap.val();
+
+                    if (currentUser.isBlocked === true) {
+                        document.getElementById('blocked-screen').style.display = 'flex';
+                        document.getElementById('support-link').href = settings.supportGroup;
+                        return; 
+                    }
+
+                    checkDailyReset();
+                } else {
+                    createNewUser();
+                }
+
+                updateUI();
+                checkUrlReferral();
+            });
+        }
+
+        function createNewUser() {
+            const tgUser = window.Telegram.WebApp.initDataUnsafe.user || {};
+            currentUser = {
+                name: tgUser.first_name || "Guest User",
+                telegramId: userId,
+                photoUrl: tgUser.photo_url || 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png',
+                points: 0,
+                adsWatchedToday: 0,
+                totalAdsWatchedLifetime: 0,
+                lastAdWatchDate: new Date().toLocaleDateString(),
+                claimedBonuses: [],
+                referralCode: Math.random().toString(36).substring(2, 10).toUpperCase(),
+                referredBy: null,
+                referredUsers: [],
+                isActivated: false
+            };
+            saveUserState();
+        }
+
+        function saveUserState() {
+            if (userId) database.ref('users/' + userId).set(currentUser);
+        }
+
+        function checkDailyReset() {
+            const today = new Date().toLocaleDateString();
+            if (currentUser.lastAdWatchDate !== today) {
+                currentUser.adsWatchedToday = 0;
+                currentUser.lastAdWatchDate = today;
+                saveUserState();
+            }
+        }
+
+        // ================= UPDATE UI =================
+        function updateUI() {
+            if (!currentUser || currentUser.isBlocked) return;
+
+            // Headers & Common
+            document.getElementById('header-name').innerHTML = `${currentUser.name} <i class="fas fa-check-circle text-blue-500 text-[10px]"></i>`;
+            document.getElementById('profile-name-big').innerText = currentUser.name;
+            document.getElementById('header-avatar').src = currentUser.photoUrl;
+            document.getElementById('profile-avatar').src = currentUser.photoUrl;
+
+            // Balances & Points
+            const pts = currentUser.points || 0;
+            document.getElementById('header-balance').innerText = pts;
+            document.getElementById('home-balance').innerText = pts;
+            document.getElementById('wallet-balance-big').innerText = pts;
+            document.getElementById('profile-main-bal').innerText = pts;
+
+            // Home / Profile Stats
+            const refCount = currentUser.referredUsers ? currentUser.referredUsers.length : 0;
+            document.getElementById('home-total-ads').innerText = currentUser.totalAdsWatchedLifetime || 0;
+            document.getElementById('home-network').innerText = refCount;
+            document.getElementById('profile-life-ads').innerText = currentUser.totalAdsWatchedLifetime || 0;
+            document.getElementById('profile-today-ads').innerText = currentUser.adsWatchedToday || 0;
+            document.getElementById('profile-ref-count').innerText = `${refCount} Ref`;
+
+            // Daily Limits & Mission
+            document.getElementById('mission-target').innerText = settings.adsPerDayLimit;
+            document.getElementById('mission-completed').innerText = currentUser.adsWatchedToday || 0;
+            document.getElementById('earn-viewed-today').innerText = currentUser.adsWatchedToday || 0;
+            document.getElementById('earn-limit-today').innerText = settings.adsPerDayLimit;
+            document.getElementById('earn-ads-left').innerText = Math.max(0, settings.adsPerDayLimit - (currentUser.adsWatchedToday || 0));
+            document.getElementById('earn-reward-amt').innerText = settings.pointsPerAd;
+
+            let progress = ((currentUser.adsWatchedToday || 0) / settings.adsPerDayLimit) * 100;
+            document.getElementById('mission-bar').style.width = `${Math.min(progress, 100)}%`;
+
+            // Referral
+            document.getElementById('referral-link').value = `${settings.referralBotLink}?start=${currentUser.referralCode}`;
+            document.getElementById('refer-bonus-amt').innerText = settings.refBonusReferrer;
+            document.getElementById('refer-total').innerText = refCount;
+            document.getElementById('refer-earned-total').innerText = refCount * settings.refBonusReferrer;
+
+            // Withdraw / Activated Check
+            document.getElementById('withdraw-min-pts').innerText = settings.minWithdrawPoints;
+            if(!currentUser.isActivated) {
+                document.getElementById('withdraw-active-screen').style.display = 'none';
+                document.getElementById('withdraw-lock-screen').style.display = 'block';
+            } else {
+                document.getElementById('withdraw-active-screen').style.display = 'block';
+                document.getElementById('withdraw-lock-screen').style.display = 'none';
+            }
+        }
+
+        function promptForNewName() {
+            const newName = prompt("Enter your new name:", currentUser.name);
+            if (newName && newName.trim()) {
+                currentUser.name = newName.trim();
+                saveUserState();
+                showToast("Name updated!");
+            }
+        }
+
+        // ================= BONUS LIST LOGIC =================
+        function renderBonusList() {
+            const bonusItems = settings.bonusList || [];
+            const container = document.getElementById('bonus-list-container');
+            
+            if (bonusItems.length === 0) {
+                container.innerHTML = '<p class="text-center text-sm font-bold text-gray-400 py-4">No bonus available right now.</p>';
+                return;
+            }
+
+            let html = '';
+            bonusItems.forEach(item => {
+                const isClaimed = currentUser?.claimedBonuses?.includes(item.id);
+                const btnHTML = isClaimed 
+                    ? `<span class="bg-gray-200 text-gray-500 text-[10px] font-bold px-4 py-1.5 rounded">CLAIMED</span>`
+                    : `<button onclick="handleBonusClick(event, '${item.id}', ${item.reward}, '${item.link}')" class="bg-[#0088cc] text-white text-[10px] font-bold px-4 py-1.5 rounded w-16 shadow-sm active:scale-95">JOIN</button>`;
+                
+                html += `
+                <div class="bg-white p-4 rounded-2xl shadow-sm flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-lg"><i class="${item.icon || 'fas fa-link'}"></i></div>
+                        <div>
+                            <p class="font-bold text-sm text-gray-800">${item.name}</p>
+                            <p class="text-[10px] font-bold text-yellow-500 mt-0.5">+${item.reward} Points</p>
+                        </div>
+                    </div>
+                    ${btnHTML}
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function handleBonusClick(e, id, reward, link) {
+            if (currentUser.claimedBonuses?.includes(id)) return;
+            
+            // Open link
+            if (window.Telegram && window.Telegram.WebApp) { window.Telegram.WebApp.openLink(link); } 
+            else { window.open(link, '_blank'); }
+
+            // Reward after delay
+            setTimeout(() => {
+                if (!currentUser.claimedBonuses) currentUser.claimedBonuses = [];
+                currentUser.claimedBonuses.push(id);
+                currentUser.points += reward;
+                saveUserState();
+                showToast("Bonus points added!");
+                renderBonusList(); // update ui
+            }, 5000);
+        }
+
+        // ================= AD WATCH LOGIC =================
+        let adWatchedSuccessfully = false;
+        
+        function handleWatchDailyAd() {
+            if (currentUser.adsWatchedToday >= settings.adsPerDayLimit) {
+                return showToast("Daily limit reached! Come back tomorrow.");
+            }
+            if(!settings.monetagId) {
+                return showToast("Ads not ready. Admin needs to set Zone ID.");
+            }
+
+            adWatchedSuccessfully = false;
+            document.getElementById('ad-overlay').style.display = 'flex';
+            document.getElementById('ad-close-btn').classList.add('hidden');
+            
+            let timeLeft = 15;
+            document.getElementById('timer-text').innerText = timeLeft;
+
+            try {
+                const adFunctionName = 'show_' + settings.monetagId;
+                if (typeof window[adFunctionName] === "function") {
+                    window[adFunctionName]();
+                }
+            } catch (e) { console.error("Ad Error:", e); }
+
+            const interval = setInterval(() => {
+                timeLeft--;
+                document.getElementById('timer-text').innerText = timeLeft;
+
+                if(timeLeft <= 0) {
+                    clearInterval(interval);
+                    adWatchedSuccessfully = true;
+                    document.getElementById('timer-text').innerText = "✅";
+                    document.getElementById('ad-close-btn').classList.remove('hidden');
+                }
+            }, 1000);
+        }
+
+        function closeAdModalAndReward() {
+            document.getElementById('ad-overlay').style.display = 'none';
+            if (adWatchedSuccessfully) {
+                currentUser.points += settings.pointsPerAd;
+                currentUser.adsWatchedToday++;
+                currentUser.totalAdsWatchedLifetime++;
+                saveUserState();
+                showToast(`+${settings.pointsPerAd} Points earned!`);
+            }
+        }
+
+        // ================= DEPOSIT LOGIC =================
+        function updateDepositDetailsUI() {
+            const select = document.getElementById('depositMethodSelect');
+            const box = document.getElementById('deposit-number-box');
+            const targetInput = document.getElementById('targetDepositNumber');
+            const label = document.getElementById('deposit-method-label');
+            const hint = document.getElementById('deposit-method-hint');
+
+            const depMethods = settings.depositMethodList || [];
+            const idx = select.value;
+
+            if (idx !== "") {
+                const m = depMethods[idx];
+                box.style.display = "block";
+                targetInput.value = m.number;
+                label.innerText = `Our ${m.name} Number:`;
+                hint.innerText = `Account Type: ${m.type} | Min Deposit: ${m.minAmount || 0} TK`;
+            } else {
+                box.style.display = "none";
+            }
+        }
+
+        function submitDepositRequest() {
+            const select = document.getElementById('depositMethodSelect');
+            const amount = parseInt(document.getElementById('depositAmountInput').value);
+            const sender = document.getElementById('depositSenderInput').value.trim();
+            const trx = document.getElementById('depositTrxInput').value.trim();
+
+            const depMethods = settings.depositMethodList || [];
+            const idx = select.value;
+
+            if (idx === "" || isNaN(amount) || !sender || !trx) {
+                return showToast("Please fill all details correctly.");
+            }
+
+            const m = depMethods[idx];
+            if (amount < (m.minAmount || 0)) {
+                return showToast(`Minimum deposit is ${m.minAmount} TK.`);
+            }
+
+            const request = {
+                userId: userId,
+                name: currentUser.name,
+                method: m.name,
+                amount: amount,
+                senderNumber: sender,
+                transactionId: trx,
+                status: "Pending",
+                date: new Date().toLocaleString()
+            };
+
+            database.ref('deposits').push(request).then(() => {
+                showToast("Request sent! Points will be added upon approval.");
+                switchTab('home');
+            });
+        }
+
+        // ================= WITHDRAW LOGIC =================
+        function handleSubmitWithdrawal() {
+            const amount = parseInt(document.getElementById('withdrawAmountInput').value);
+            const method = document.getElementById('withdrawMethodSelect').value;
+            const account = document.getElementById('withdrawAccountInput').value.trim();
+            
+            const minPts = settings.minWithdrawPoints || 0;
+
+            if (isNaN(amount) || amount < minPts) {
+                return showToast(`Minimum withdraw is ${minPts} Points.`);
+            }
+            if (amount > currentUser.points) {
+                return showToast("Insufficient balance.");
+            }
+            if (!method || !account) {
+                return showToast("Fill all inputs correctly.");
+            }
+
+            const request = {
+                userId: userId,
+                name: currentUser.name,
+                amount: amount,
+                method: method,
+                account: account,
+                status: "Pending",
+                date: new Date().toLocaleString()
+            };
+
+            database.ref('withdrawals').push(request).then(() => {
+                currentUser.points -= amount;
+                saveUserState();
+                showToast("Withdrawal request sent successfully!");
+                document.getElementById('withdrawAmountInput').value = '';
+                document.getElementById('withdrawAccountInput').value = '';
+            });
+        }
+
+        // ================= REFERRAL LOGIC =================
+        function checkUrlReferral() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const refCodeFromUrl = urlParams.get('start');
+
+            if (refCodeFromUrl && !currentUser.referredBy && refCodeFromUrl !== currentUser.referralCode) {
+                database.ref('users').orderByChild('referralCode').equalTo(refCodeFromUrl).once('value', (snapshot) => {
+                    if (snapshot.exists()) {
+                        const referrerId = Object.keys(snapshot.val())[0];
+                        const referrerData = snapshot.val()[referrerId];
+
+                        currentUser.referredBy = refCodeFromUrl;
+                        currentUser.points += (settings.refBonusReferee || 100);
+
+                        const updatedReferredUsers = referrerData.referredUsers || [];
+                        updatedReferredUsers.push(userId);
+
+                        database.ref('users/' + referrerId).update({
+                            points: referrerData.points + (settings.refBonusReferrer || 300),
+                            referredUsers: updatedReferredUsers
+                        });
+
+                        saveUserState();
+                        showToast("Referral Bonus Added!");
+                    }
+                });
+            }
+        }
+
+        // ================= UTILS & NAVIGATION =================
+        function switchTab(tabId) {
+            document.querySelectorAll('.page-section').forEach(p => p.classList.remove('active'));
+            document.getElementById('page-' + tabId).classList.add('active');
+            
+            document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+            const navItem = document.querySelector(`.nav-item[data-tab="${tabId}"]`);
+            if(navItem) navItem.classList.add('active');
+            
+            window.scrollTo(0, 0);
+        }
+
+        function copyElementText(id) {
+            const el = document.getElementById(id);
+            el.select();
+            document.execCommand("copy");
+            showToast("Copied to clipboard!");
+        }
+
+        function shareReferralLink() {
+            const link = document.getElementById('referral-link').value;
+            const text = `Join Task Networks and earn points!`;
+            if (window.Telegram && window.Telegram.WebApp) {
+                window.Telegram.WebApp.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
+            }
+        }
+
+        function openOfficialChannel() {
+            if (window.Telegram && window.Telegram.WebApp) {
+                window.Telegram.WebApp.openLink(settings.supportGroup);
+            } else {
+                window.open(settings.supportGroup, '_blank');
+            }
+        }
+
+    </script>
+</body>
+</html>
