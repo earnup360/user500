@@ -13,7 +13,7 @@
     <!-- Telegram Web App SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     
-    <!-- Firebase SDK (Compat version for simple HTML integration) -->
+    <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
 
@@ -486,7 +486,6 @@
                 }
 
                 updateUI();
-                checkUrlReferral();
             });
         }
 
@@ -558,7 +557,7 @@
             let progress = ((currentUser.adsWatchedToday || 0) / settings.adsPerDayLimit) * 100;
             document.getElementById('mission-bar').style.width = `${Math.min(progress, 100)}%`;
 
-            // Referral
+            // Referral Link Updated for Python Bot (?start= instead of ?startapp=)
             document.getElementById('referral-link').value = `${settings.referralBotLink}?start=${currentUser.referralCode}`;
             document.getElementById('refer-bonus-amt').innerText = settings.refBonusReferrer;
             document.getElementById('refer-total').innerText = refCount;
@@ -775,35 +774,6 @@
                 document.getElementById('withdrawAmountInput').value = '';
                 document.getElementById('withdrawAccountInput').value = '';
             });
-        }
-
-        // ================= REFERRAL LOGIC =================
-        function checkUrlReferral() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const refCodeFromUrl = urlParams.get('start');
-
-            if (refCodeFromUrl && !currentUser.referredBy && refCodeFromUrl !== currentUser.referralCode) {
-                database.ref('users').orderByChild('referralCode').equalTo(refCodeFromUrl).once('value', (snapshot) => {
-                    if (snapshot.exists()) {
-                        const referrerId = Object.keys(snapshot.val())[0];
-                        const referrerData = snapshot.val()[referrerId];
-
-                        currentUser.referredBy = refCodeFromUrl;
-                        currentUser.points += (settings.refBonusReferee || 100);
-
-                        const updatedReferredUsers = referrerData.referredUsers || [];
-                        updatedReferredUsers.push(userId);
-
-                        database.ref('users/' + referrerId).update({
-                            points: referrerData.points + (settings.refBonusReferrer || 300),
-                            referredUsers: updatedReferredUsers
-                        });
-
-                        saveUserState();
-                        showToast("Referral Bonus Added!");
-                    }
-                });
-            }
         }
 
         // ================= UTILS & NAVIGATION =================
